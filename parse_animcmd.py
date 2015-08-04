@@ -8,37 +8,41 @@ from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
 from pygments.styles import get_style_by_name
 import ghdiff
+RPX_ELF = "0005000e10145000/144/code/cross_f.rpx.elf"
 lookupTable = {}
-f = open("0005000e10145000/144/code/cross_f.rpx.elf","rb")
-for i in range(0,562):
-    f.seek(0x02B7D4AD+i*8)
-    entry = struct.unpack(">II",f.read(8))
-    f.seek(0x02B7D4AD-562*4+entry[1]*4)
-    #print hex(f.tell())
-    
-    size = struct.unpack(">I",f.read(4))[0]
-    lookupTable[entry[0]] = (entry[1],size)
+if os.path.isfile(RPX_ELF):
+    print "Updating command.py.template"
+    f = open("0005000e10145000/144/code/cross_f.rpx.elf","rb")
+    for i in range(0,562):
+        f.seek(0x02B7D4AD+i*8)
+        entry = struct.unpack(">II",f.read(8))
+        f.seek(0x02B7D4AD-562*4+entry[1]*4)
+        #print hex(f.tell())
+        
+        size = struct.unpack(">I",f.read(4))[0]
+        lookupTable[entry[0]] = (entry[1],size)
 
-f = open("command.py.template","w")
-f.write("commands = {}\n")
-j = 0
-for item in sorted(lookupTable.items(), key=lambda it: it[1][0]):
-    
-    if item[0] in commands:
-        tmp = commands[item[0]]
-        if 'params' not in tmp:
+    f = open("command.py.template","w")
+    f.write("commands = {}\n")
+    j = 0
+    for item in sorted(lookupTable.items(), key=lambda it: it[1][0]):
+        
+        if item[0] in commands:
+            tmp = commands[item[0]]
+            if 'params' not in tmp:
+                tmp["params"] = []
+        else:
+            tmp = {}
+            tmp["name"] = "unk-%08X" % item[0]
+            tmp["fmt"] = ""
+            if item[1][1]-1 > 0:
+                for i in range(item[1][1]-1):
+                    tmp["fmt"] += "I"
             tmp["params"] = []
-    else:
-        tmp = {}
-        tmp["name"] = "unk-%08X" % item[0]
-        tmp["fmt"] = ""
-        if item[1][1]-1 > 0:
-            for i in range(item[1][1]-1):
-                tmp["fmt"] += "I"
-        tmp["params"] = []
-    f.write( "commands[0x%08X] = {'name':'%s', 'fmt':'%s','params': %s} #%03X\n"%(item[0],tmp['name'],tmp['fmt'],repr(tmp['params']),j))
-    j += 1
-f.close()
+        f.write( "commands[0x%08X] = {'name':'%s', 'fmt':'%s','params': %s} #%03X\n"%(item[0],tmp['name'],tmp['fmt'],repr(tmp['params']),j))
+        j += 1
+    f.close()
+
 def parseParams(filename):
     global out
     f = open(filename,"rb")
@@ -116,7 +120,7 @@ def parseACMD(filename):
                 break
             
             try:
-                CMD_data = lookupTable[CMD]
+                #CMD_data = lookupTable[CMD]
                 CMD_data2 = commands[CMD]
             except KeyError:
                 print "COULDNT FIND",hex(CMD),output.getvalue()
@@ -176,7 +180,7 @@ def diff():
         for char in os.listdir("extracted_game/"+from_version+"/fighter"):
             if char == "common" or char == "mii":
                 continue
-            
+            print char
             lookup = motionpac("extracted_game/%s/fighter/%s/motion/"%(0,char))
             processList = []
             prefix = "extracted_game/%s/fighter/"
@@ -312,7 +316,7 @@ def dumpAll():
             print version,revision
         except:
             print "Unexpected error:", sys.exc_info()[0]
-            continue
+            
 
         for char in os.listdir("extracted_game/"+version+"/fighter"):
             if char == "common" or char == "mii":
@@ -324,14 +328,17 @@ def dumpAll():
             if os.path.isdir(prefix+"%s/script/animcmd/weapon/" % (char)):
                 for d in os.listdir(prefix+"%s/script/animcmd/weapon/" % (char)):
                     if os.path.isdir(prefix+"/%s/script/animcmd/weapon/"%(char)+d):
-                        processList.append((d,prefix+prefix+"%s/script/animcmd/weapon/%s/motion.mtable"%(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d)))
+                        processList.append((d,prefix+"%s/script/animcmd/weapon/%s/motion.mtable"%(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d)))
             indexedSubactionNames = defaultdict(str)
             params = parseParams(prefix+"../param/fighter/fighter_param_vl_%s.bin"%(char))
             for subChar, motionPath, scriptPath in processList:
-                print "\t",char,subChar
-
+                
+                
                 if not os.path.isfile(motionPath):
+                    print motionPath + "isn't a file"
                     continue
+                
+                print "\t",char,subChar
                 f = open(motionPath,"rb")
                 outdir = "processed/animcmd/%s/" % (version)
                 if not os.path.isdir(outdir):
