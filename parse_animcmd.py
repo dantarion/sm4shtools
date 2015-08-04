@@ -290,7 +290,7 @@ def diff():
                         if ff != tt:
                             printedAnything = True
                             if not printedHeader:
-                                log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
+                                log.write("<h2 id='%03X' class='toc'>%03X - %s - %08X</h2>\n"%(i,i,name,t))
                                 printedHeader = True
                             o = ""
                             o = ghdiff.diff(ff,tt,css=False)
@@ -306,7 +306,7 @@ def diff():
                     os.remove(logfn)
 def dumpAll():
     formatter = HtmlFormatter(linenos=True,style=get_style_by_name("paraiso-dark"))
-    for version in ["144"]:#["0","32","48","80","128","144"]:
+    for version in ["0","32","48","80","128","144"]:
         if not os.path.isdir("extracted_game/"+version):
             continue
         try:
@@ -379,4 +379,4 @@ def dumpAll():
                     i += 1
                 log.close()
 dumpAll()
-#diff()
+diff()
