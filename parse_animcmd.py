@@ -1,4 +1,4 @@
-import os, struct,sys,re,zlib,cStringIO
+import os, struct,sys,re,zlib,cStringIO,shutil
 from commands import commands
 from collections import defaultdict
 import difflib
@@ -83,7 +83,7 @@ def parseParams(filename):
         except TypeError:
             return attrs
     return attrs
-def parseACMD(filename):
+def parseACMD(filename, log=False):
     global commands
     outputTable = {}
     if not os.path.isfile(filename):
@@ -143,6 +143,10 @@ def parseACMD(filename):
                 if pi < len(CMD_data2['params'])-1:
                     param_text[pi] = CMD_data2['params'][pi]+"="+param_text[pi]
             output.write("%s(%s)"%(CMD_data2['name'],", ".join(param_text)))
+            if log and "unk_" in CMD_data2['name']:
+                tmp = open("runtimelog/%08X.txt" % CMD,"a+")
+                tmp.write("%20s %s(%s)\n"%(filename,CMD_data2['name'],", ".join(param_text)))
+                tmp.close()
             if comment != "":
                 output.write("#"+comment)
             output.write("\n")
@@ -305,6 +309,9 @@ def diff():
                 if not printedAnything:
                     os.remove(logfn)
 def dumpAll():
+    if os.path.isdir("runtimelog"):
+        shutil.rmtree("runtimelog")
+    os.mkdir("runtimelog")
     formatter = HtmlFormatter(linenos=True,style=get_style_by_name("paraiso-dark"))
     for version in ["0","32","48","80","128","144"]:
         if not os.path.isdir("extracted_game/"+version):
@@ -351,8 +358,9 @@ def dumpAll():
                 log.write(formatter.get_style_defs('.highlight'))
                 log.write("</style>")
                 animcmd = {}
-                for tmp in ["game","effect","sound","expression"]:
-                    animcmd[tmp] = parseACMD(scriptPath+"%s.bin"%(tmp))
+                for tmp in ["game"]:#,"effect","sound","expression"]:
+                
+                    animcmd[tmp] = parseACMD(scriptPath+"%s.bin"%(tmp), log=True)
                 i = 0
                 
                 while True:
@@ -366,14 +374,14 @@ def dumpAll():
                         name = hex(t)
                     indexedSubactionNames[i] = name
                     nullSubaction = True
-                    for tmp in ["game","effect","sound","expression"]:
+                    for tmp in ["game"]:#,"effect","sound","expression"]:
                         if t in animcmd[tmp]:
                             nullSubaction = False
                     if not nullSubaction:
                         log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
                         p = params[0][i*6:i*6+6]
                         log.write("<pre>params: {%d, %d, IASA?=%d, %d, %d, %d}</pre>\n" % (p[0],p[1],p[2],p[3],p[4],p[5]) )
-                    for tmp in ["game","effect","sound","expression"]:
+                    for tmp in ["game"]:#,"effect","sound","expression"]:
                         if t in animcmd[tmp]:
                             log.write("<h4 >%s</h4>\n%s\n" % (tmp,highlight(animcmd[tmp][t],PythonLexer(),formatter)))
                     i += 1
