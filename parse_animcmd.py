@@ -1,5 +1,6 @@
 import os, struct,sys,re,zlib,cStringIO,shutil
 from commands import commands
+import mscsb_commands
 from collections import defaultdict
 import difflib
 from pygments import highlight
@@ -43,6 +44,74 @@ if os.path.isfile(RPX_ELF):
         j += 1
     f.close()
 
+def parseMCSCB(filename,logname):
+    f = open(filename,"rb")
+    log = open(logname,"w")
+    output = cStringIO.StringIO()
+    #Always the Same
+    struct.unpack("<IIII",f.read(16))
+    #Size related
+    entry_offsets, entry_point, entry_count, unk_count = struct.unpack("<IIII",f.read(16))
+    entry_offsets, entry_point, entry_count, unk_count
+    #64,unk_count,0,0
+    string_size, string_count, unk, unk = struct.unpack("<IIII",f.read(16))
+    #0,0,0,0
+    struct.unpack("<IIII",f.read(16))
+    base = entry_offsets+0x30
+    while base % 16:
+        base += 1
+    print entry_count,hex(base)
+    lookup = {}
+    for i in range(0,entry_count):
+        STACK = []
+        f.seek(base+i*4)
+        off, = struct.unpack("<I",f.read(4))
+        lookup[off] = i
+    for i in range(0,entry_count):
+        STACK = [0]
+        f.seek(base+i*4)
+        off, = struct.unpack("<I",f.read(4))
+        #print off
+        f.seek(0x30+off)
+        output.write("def func_%02X_%X():\n" % (i,off))
+        
+        while True:
+            try:
+                off = f.tell()-0x30
+                CMD = ord(f.read(1))
+                #print hex(CMD)
+                CMD_DATA = mscsb_commands.commands[CMD]
+                params = struct.unpack(">"+CMD_DATA['fmt'],f.read(struct.calcsize(CMD_DATA['fmt'])))
+                param_text = []
+                comment = ""
+                for pi,param in enumerate(params):
+                    if isinstance(param,float):
+                        param_text.append("%#f" %param)
+                    else:
+                        param_text.append(hex(param))
+                if CMD == 0x8A:
+                    STACK.append(params[0])
+                if CMD == 0x2D:
+                    call_params = STACK[-params[0]:]
+                    comment = "(id=%d) (%s))" % (params[1], call_params)
+
+                if CMD == 0x31 and STACK[-1] in lookup:
+                    comment = "\tfunc_%02X_%X()" % (lookup[STACK[-1]],STACK[-1])
+                output.write("\t%s_%02X(%s)" %(CMD_DATA['name'],CMD,", ".join(param_text)))
+                output.write( "#@%X %s\n" % (off,comment))
+                
+                if CMD == 3:
+                    break
+            except Exception:
+                print hex(CMD),"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X" % struct.unpack("16B",f.read(16))
+                log.write(output.getvalue())
+                log.close()
+                raise
+                
+            
+    log.write(output.getvalue())
+    log.close()
+                     
 def parseParams(filename):
     global out
     f = open(filename,"rb")
@@ -174,146 +243,149 @@ def motionpac(folder):
                     d[zlib.crc32(m.group(4).lower()+"_c3")& 0xffffffff] = m.group(4)+"_C3"
     d[zlib.crc32("attack100end")] = "Attack100End"              
     return d
-
-
+prefix = "extracted_game/%s/fighter/"
+def getProcessList(char,version):
+    processList = []
+    processList.append(("",prefix+"%s/script/animcmd/body/motion.mtable"%(char),prefix+"%s/script/animcmd/body/"%(char),prefix+"%s/script/msc/%s.mscsb"%(char,char)))
+    
+    if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (version,char)):
+        for d in os.listdir((prefix+"%s/script/animcmd/weapon/") % (version,char)):
+            if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (version,char)+d):
+                processList.append((d,prefix+"%s/script/animcmd/weapon/%s/motion.mtable" %(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d),prefix+"%s/script/msc/%s/%s.mscsb" % (char,d,d)))
+    return processList
 def diff():
     for from_version,to_version in [("128","144")]:# ["0","32","48","80","128"]:
         if not os.path.isdir("extracted_game/"+from_version) or not os.path.isdir("extracted_game/"+to_version):
             continue
-
+    
         for char in os.listdir("extracted_game/"+from_version+"/fighter"):
             if char == "common" or char == "mii":
                 continue
             print char
             lookup = motionpac("extracted_game/%s/fighter/%s/motion/"%(0,char))
-            processList = []
-            prefix = "extracted_game/%s/fighter/"
-            processList.append(("",prefix+"%s/script/animcmd/body/motion.mtable"%(char),prefix+"%s/script/animcmd/body/"%(char)))
             f_params = parseParams((prefix+"../param/fighter/fighter_param_vl_%s.bin")%(from_version,char))
             t_params = parseParams((prefix+"../param/fighter/fighter_param_vl_%s.bin")%(to_version,char))
-            if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (from_version,char)):
-                for d in os.listdir((prefix+"%s/script/animcmd/weapon/") % (from_version,char)):
-                    if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (from_version,char)+d):
-                        processList.append((d,prefix+"%s/script/animcmd/weapon/%s/motion.mtable" %(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d)))
-                    else:
-                        print d
 
-            for subChar, motionPath, scriptPath in processList:
+
+            for subChar, motionPath, scriptPath,mscsbPath in getProcessList(char,from_version):
                 print "\t",char,subChar
-                if not os.path.isfile(motionPath %(to_version)):
-                    continue
-                f = open(motionPath %(to_version),"rb")
-                printedAnything = False
-                outdir = "processed/animcmd/diff-%s-%s/" % (from_version,to_version)
-                if not os.path.isdir(outdir):
-                    os.makedirs(outdir)
+
                 
-                if subChar == "":  
-                    logfn = outdir+char+".html"
-                else:
-                    logfn = outdir+char+"_"+subChar+".html"
-                log = open(logfn,"w")
-                log.write("""<style type="text/css">
-    .diff {
-        border: 1px solid #cccccc;
-        background: none repeat scroll 0 0 #f8f8f8;
-        font-family: 'Bitstream Vera Sans Mono','Courier',monospace;
-        font-size: 12px;
-        line-height: 1.4;
-        white-space: normal;
-        word-wrap: break-word;
-    }
-    .diff div:hover {
-        background-color:#ffc;
-    }
-    .diff .control {
-        background-color: #eaf2f5;
-        color: #999999;
-    }
-    .diff .insert {
-        background-color: #ddffdd;
-        color: #000000;
-    }
-    .diff .insert .highlight {
-        background-color: #aaffaa;
-        color: #000000;
-    }
-    .diff .delete {
-        background-color: #ffdddd;
-        color: #000000;
-    }
-    .diff .delete .highlight {
-        background-color: #ffaaaa;
-        color: #000000;
-    }
-</style>""")
-                from_animcmd = defaultdict(str)
-                for tmp in ["game","effect","sound","expression"]:
-                    from_animcmd[tmp] = parseACMD((scriptPath+"%s.bin")%(from_version,tmp))
-                to_animcmd = defaultdict(str)
-                for tmp in ["game","effect","sound","expression"]:
-                    to_animcmd[tmp] = parseACMD((scriptPath+"%s.bin")%(to_version,tmp))
-                i = 0
-
-                while True:
-                    test = f.read(4)
-                    if len(test) != 4:
-                        break
-                    t, = struct.unpack(">I",test)
-                    if t in lookup:
-                        name = lookup[t]
-                    else:
-                        name = ""
-                    printedHeader = False
-
-                    f_p = f_params[0][i*6:i*6+6]
-                    t_p = t_params[0][i*6:i*6+6]
-                    if len(f_p) == 6:
-                        f_p = "{{{0}, {1}, IASA?={2}, {3}, {4}, {5}}}".format(*f_p)
-                    else:
-                        f_p = ""
+                ''' Parse ANIMCMD '''
+                if os.path.isfile(motionPath %(to_version)):
                     
-                    if len(t_p) == 6:
-                        t_p = "{{{0}, {1}, IASA?={2}, {3}, {4}, {5}}}".format(*t_p)
+                    f = open(motionPath %(to_version),"rb")
+                    printedAnything = False
+                    outdir = "processed/animcmd/diff-%s-%s/" % (from_version,to_version)
+                    if not os.path.isdir(outdir):
+                        os.makedirs(outdir)
+                    
+                    if subChar == "":  
+                        logfn = outdir+char+".html"
                     else:
-                        t_p = ""
-                    if f_p != t_p:
-                        printedAnything = True
-                        if not printedHeader:
-                                
-                                log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
-                                printedHeader = True
-                                log.write("<h4>%s</h4>\n%s\n" % ("params",ghdiff.diff(repr(f_p),repr(t_p),css=False)))
+                        logfn = outdir+char+"_"+subChar+".html"
+                    log = open(logfn,"w")
+                    log.write("""<style type="text/css">
+        .diff {
+            border: 1px solid #cccccc;
+            background: none repeat scroll 0 0 #f8f8f8;
+            font-family: 'Bitstream Vera Sans Mono','Courier',monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        .diff div:hover {
+            background-color:#ffc;
+        }
+        .diff .control {
+            background-color: #eaf2f5;
+            color: #999999;
+        }
+        .diff .insert {
+            background-color: #ddffdd;
+            color: #000000;
+        }
+        .diff .insert .highlight {
+            background-color: #aaffaa;
+            color: #000000;
+        }
+        .diff .delete {
+            background-color: #ffdddd;
+            color: #000000;
+        }
+        .diff .delete .highlight {
+            background-color: #ffaaaa;
+            color: #000000;
+        }
+    </style>""")
+                    from_animcmd = defaultdict(str)
                     for tmp in ["game","effect","sound","expression"]:
-                        ff = ""
-                        tt = ""
-                        if t in from_animcmd[tmp]:
-                            ff = from_animcmd[tmp][t].split("\n")
-                        if t in to_animcmd[tmp]:
-                            tt = to_animcmd[tmp][t].split("\n")
-                        if ff != tt:
+                        from_animcmd[tmp] = parseACMD((scriptPath+"%s.bin")%(from_version,tmp))
+                    to_animcmd = defaultdict(str)
+                    for tmp in ["game","effect","sound","expression"]:
+                        to_animcmd[tmp] = parseACMD((scriptPath+"%s.bin")%(to_version,tmp))
+                    i = 0
+
+                    while True:
+                        test = f.read(4)
+                        if len(test) != 4:
+                            break
+                        t, = struct.unpack(">I",test)
+                        if t in lookup:
+                            name = lookup[t]
+                        else:
+                            name = ""
+                        printedHeader = False
+
+                        f_p = f_params[0][i*6:i*6+6]
+                        t_p = t_params[0][i*6:i*6+6]
+                        if len(f_p) == 6:
+                            f_p = "{{{0}, {1}, IASA?={2}, {3}, {4}, {5}}}".format(*f_p)
+                        else:
+                            f_p = ""
+                        
+                        if len(t_p) == 6:
+                            t_p = "{{{0}, {1}, IASA?={2}, {3}, {4}, {5}}}".format(*t_p)
+                        else:
+                            t_p = ""
+                        if f_p != t_p:
                             printedAnything = True
                             if not printedHeader:
-                                log.write("<h2 id='%03X' class='toc'>%03X - %s - %08X</h2>\n"%(i,i,name,t))
-                                printedHeader = True
-                            o = ""
-                            o = ghdiff.diff(ff,tt,css=False)
-                            #for line in difflib.unified_diff(ff,tt):
-                            #    o += line
-                            #    o += "\n"
-                            log.write("<h4>%s</h4>\n%s\n" % (tmp,o))
-                    i += 1
-                size = log.tell()
-                
-                log.close()
-                if not printedAnything:
-                    os.remove(logfn)
+                                    
+                                    log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
+                                    printedHeader = True
+                                    log.write("<h4>%s</h4>\n%s\n" % ("params",ghdiff.diff(repr(f_p),repr(t_p),css=False)))
+                        for tmp in ["game","effect","sound","expression"]:
+                            ff = ""
+                            tt = ""
+                            if t in from_animcmd[tmp]:
+                                ff = from_animcmd[tmp][t].split("\n")
+                            if t in to_animcmd[tmp]:
+                                tt = to_animcmd[tmp][t].split("\n")
+                            if ff != tt:
+                                printedAnything = True
+                                if not printedHeader:
+                                    log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
+                                    printedHeader = True
+                                o = ""
+                                o = ghdiff.diff(ff,tt,css=False)
+                                #for line in difflib.unified_diff(ff,tt):
+                                #    o += line
+                                #    o += "\n"
+                                log.write("<h4>%s</h4>\n%s\n" % (tmp,o))
+                        i += 1
+                    size = log.tell()
+                    
+                    log.close()
+                    if not printedAnything:
+                        os.remove(logfn)
 def dumpAll():
     if os.path.isdir("runtimelog"):
         shutil.rmtree("runtimelog")
     os.mkdir("runtimelog")
     formatter = HtmlFormatter(linenos=True,style=get_style_by_name("paraiso-dark"))
-    for version in ["0","32","48","80","128","144"]:
+    for version in ["144"]:#["0","32","48","80","128","144"]:
         if not os.path.isdir("extracted_game/"+version):
             continue
         try:
@@ -328,63 +400,65 @@ def dumpAll():
         for char in os.listdir("extracted_game/"+version+"/fighter"):
             if char == "common" or char == "mii":
                 continue
+            
             lookup = motionpac("extracted_game/%s/fighter/%s/motion/"%(0,char))
-            processList = []
-            prefix = "extracted_game/%s/fighter/" % version
-            processList.append(("",prefix+"%s/script/animcmd/body/motion.mtable"%(char),prefix+"%s/script/animcmd/body/"%(char)))
-            if os.path.isdir(prefix+"%s/script/animcmd/weapon/" % (char)):
-                for d in os.listdir(prefix+"%s/script/animcmd/weapon/" % (char)):
-                    if os.path.isdir(prefix+"/%s/script/animcmd/weapon/"%(char)+d):
-                        processList.append((d,prefix+"%s/script/animcmd/weapon/%s/motion.mtable"%(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d)))
             indexedSubactionNames = defaultdict(str)
-            params = parseParams(prefix+"../param/fighter/fighter_param_vl_%s.bin"%(char))
-            for subChar, motionPath, scriptPath in processList:
-                
-                
-                if not os.path.isfile(motionPath):
-                    print motionPath + "isn't a file"
-                    continue
-                
-                print "\t",char,subChar
-                f = open(motionPath,"rb")
-                outdir = "processed/animcmd/%s/" % (version)
-                if not os.path.isdir(outdir):
-                    os.makedirs(outdir)
+            
+            for subChar, motionPath, scriptPath, mcscbPath in getProcessList(char,version):
                 if subChar == "":
-                    log = open(outdir+char+".html","w")
+                    logfn= char+".html"
                 else:
-                    log = open(outdir+char+"_"+subChar+".html","w")
-                log.write("<style>")
-                log.write(formatter.get_style_defs('.highlight'))
-                log.write("</style>")
-                animcmd = {}
-                for tmp in ["game"]:#,"effect","sound","expression"]:
-                
-                    animcmd[tmp] = parseACMD(scriptPath+"%s.bin"%(tmp), log=True)
-                i = 0
-                
-                while True:
-                    test = f.read(4)
-                    if len(test) != 4:
-                        break
-                    t, = struct.unpack(">I",test)
-                    if t in lookup:
-                        name = lookup[t]
+                    logfn = char+"_"+subChar+".html"
+                print "\t",char,subChar
+                ''' Parse MSCSB '''
+                if os.path.isfile(mcscbPath %(version)):
+                    print "MSCSBBBBB"
+                    outdir = "processed/msc/%s/" % (version)
+                    if not os.path.isdir(outdir):
+                        os.makedirs(outdir)
+                    code = parseMCSCB(mcscbPath%version, outdir+logfn)
+                continue
+                if os.path.isfile(motionPath):                   
+                    params = parseParams(prefix+"../param/fighter/fighter_param_vl_%s.bin"%(char))
+                    f = open(motionPath,"rb")
+                    outdir = "processed/animcmd/%s/" % (version)
+                    if not os.path.isdir(outdir):
+                        os.makedirs(outdir)
+                    if subChar == "":
+                        log = open(outdir+char+".html","w")
                     else:
-                        name = hex(t)
-                    indexedSubactionNames[i] = name
-                    nullSubaction = True
+                        log = open(outdir+char+"_"+subChar+".html","w")
+                    log.write("<style>")
+                    log.write(formatter.get_style_defs('.highlight'))
+                    log.write("</style>")
+                    animcmd = {}
                     for tmp in ["game"]:#,"effect","sound","expression"]:
-                        if t in animcmd[tmp]:
-                            nullSubaction = False
-                    if not nullSubaction:
-                        log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
-                        p = params[0][i*6:i*6+6]
-                        log.write("<pre>params: {%d, %d, IASA?=%d, %d, %d, %d}</pre>\n" % (p[0],p[1],p[2],p[3],p[4],p[5]) )
-                    for tmp in ["game"]:#,"effect","sound","expression"]:
-                        if t in animcmd[tmp]:
-                            log.write("<h4 >%s</h4>\n%s\n" % (tmp,highlight(animcmd[tmp][t],PythonLexer(),formatter)))
-                    i += 1
-                log.close()
+                    
+                        animcmd[tmp] = parseACMD(scriptPath+"%s.bin"%(tmp), log=True)
+                    i = 0
+                    
+                    while True:
+                        test = f.read(4)
+                        if len(test) != 4:
+                            break
+                        t, = struct.unpack(">I",test)
+                        if t in lookup:
+                            name = lookup[t]
+                        else:
+                            name = hex(t)
+                        indexedSubactionNames[i] = name
+                        nullSubaction = True
+                        for tmp in ["game"]:#,"effect","sound","expression"]:
+                            if t in animcmd[tmp]:
+                                nullSubaction = False
+                        if not nullSubaction:
+                            log.write("<h2 class='toc'>%03X - %s - %08X</h2>\n"%(i,name,t))
+                            p = params[0][i*6:i*6+6]
+                            log.write("<pre>params: {%d, %d, IASA?=%d, %d, %d, %d}</pre>\n" % (p[0],p[1],p[2],p[3],p[4],p[5]) )
+                        for tmp in ["game"]:#,"effect","sound","expression"]:
+                            if t in animcmd[tmp]:
+                                log.write("<h4 >%s</h4>\n%s\n" % (tmp,highlight(animcmd[tmp][t],PythonLexer(),formatter)))
+                        i += 1
+                    log.close()
 dumpAll()
-diff()
+#diff()
