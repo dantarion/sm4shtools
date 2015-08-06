@@ -43,7 +43,16 @@ if os.path.isfile(RPX_ELF):
         f.write( "commands[0x%08X] = {'name':'%s', 'fmt':'%s','params': %s} #%03X\n"%(item[0],tmp['name'],tmp['fmt'],repr(tmp['params']),j))
         j += 1
     f.close()
-
+def getParamText(params):
+    param_text = []
+    for pi,param in enumerate(params):
+        if isinstance(param,float):
+            param_text.append("%#f" %param)
+        elif isinstance(param,str):
+            param_text.append(param)
+        else:
+            param_text.append(hex(param))
+    return param_text
 def parseMCSCB(filename,logname):
     f = open(filename,"rb")
     log = open(logname,"w")
@@ -67,39 +76,46 @@ def parseMCSCB(filename,logname):
         f.seek(base+i*4)
         off, = struct.unpack("<I",f.read(4))
         lookup[off] = i
-    for i in range(0,entry_count):
+    for index in range(0,entry_count):
         STACK = [0]
-        f.seek(base+i*4)
+        f.seek(base+index*4)
         off, = struct.unpack("<I",f.read(4))
+        func_start = off
         #print off
         f.seek(0x30+off)
-        output.write("def func_%02X_%X():\n" % (i,off))
         
+        
+        commands = []
+        INDENT = 0
+        INDENT_STACK = []
         while True:
             try:
                 off = f.tell()-0x30
                 CMD = ord(f.read(1))
                 #print hex(CMD)
+                while off-func_start in INDENT_STACK:
+                    INDENT -= 1
+                    INDENT_STACK.remove(off-func_start)
+                nextIndent = INDENT
                 CMD_DATA = mscsb_commands.commands[CMD]
-                params = struct.unpack(">"+CMD_DATA['fmt'],f.read(struct.calcsize(CMD_DATA['fmt'])))
-                param_text = []
-                comment = ""
-                for pi,param in enumerate(params):
-                    if isinstance(param,float):
-                        param_text.append("%#f" %param)
-                    else:
-                        param_text.append(hex(param))
-                if CMD == 0x8A:
-                    STACK.append(params[0])
-                if CMD == 0x2D:
-                    call_params = STACK[-params[0]:]
-                    comment = "(id=%d) (%s))" % (params[1], call_params)
-
-                if CMD == 0x31 and STACK[-1] in lookup:
-                    comment = "\tfunc_%02X_%X()" % (lookup[STACK[-1]],STACK[-1])
-                output.write("\t%s_%02X(%s)" %(CMD_DATA['name'],CMD,", ".join(param_text)))
-                output.write( "#@%X %s\n" % (off,comment))
-                
+                params = list(struct.unpack(">"+CMD_DATA['fmt'],f.read(struct.calcsize(CMD_DATA['fmt']))))
+                if CMD in [0x2E,0x34]:
+                    nextIndent = INDENT+1
+                    INDENT_STACK.append(params[0]-func_start)
+                if CMD in [0x2E,0x34,0x35,0x36,0xAE]:
+                    params[0] = "local(0x%X)" % (params[0]-func_start)
+                    
+                '''
+                if CMD == 0x2D and params[1] == 0x3 and commands[-1][1] == 0x8A:
+                    commands[-1][2][0] = "func_%02X" % (lookup[commands[-1][2][0]])
+                if CMD == 0x2F and commands[-1][1] == 0x8A:
+                    commands[-1][2][0] = "func_%02X" % (lookup[commands[-1][2][0]])
+                '''
+                if CMD == 0x8A and params[0] in lookup:
+                    params[0] = "func_%02X" % (lookup[params[0]])
+                    
+                commands.append((off,INDENT,CMD,params))
+                INDENT = nextIndent
                 if CMD == 3:
                     break
             except Exception:
@@ -107,8 +123,45 @@ def parseMCSCB(filename,logname):
                 log.write(output.getvalue())
                 log.close()
                 raise
-                
+        for i,data in enumerate(commands):
+            off,currentIndent,CMD,params = data
+            comment = ""
+            CMD_DATA = mscsb_commands.commands[CMD]
             
+            if CMD in [0x8A,0x8D]:
+                STACK.append(params[0])
+            if CMD == 0x2D:
+                call_params = STACK[-params[0]:]
+                comment = "(id=%d) (%s))" % (params[1], ", ".join(getParamText(call_params)))
+            if CMD in [0x2F,0x31]:
+                tmp = ""
+                if params[0] != 0:
+                    tmp = ", ".join(getParamText(STACK[-1-params[0]:-1]))
+                comment = "call %s(%s)" % (STACK[-1],tmp)
+            param_text = getParamText(params)
+            if CMD != 0x2:
+                for i in range(0,currentIndent+1):
+                    output.write("\t")
+            
+            if CMD in [0x02]:
+                tmp = []
+                for j in range(1,params[1]+1):
+                    tmp.append("param"+str(j))
+                output.write("\ndef func_%02X(%s):" % (index,", ".join(tmp)))
+                
+            elif CMD in [0x8A]:
+                output.write("params.append(%s)"% (", ".join(param_text)))
+            
+            elif CMD in [0x1C,0x41]:
+                output.write("unk%02X(%s,%s,params[0x%x])\n"% (CMD,["TYPE_INT","TYPE3B"][params[0]],params[1],params[2]))
+            else:
+                output.write("%s_%02X(%s)" %(CMD_DATA['name'],CMD,", ".join(param_text)))
+
+            if comment:
+                output.write("# %s " % comment)
+            #output.write( "#@local-0x%X" % (off-func_start))
+            #output.write( " #@global-0x%X" % (off))
+            output.write("\n")
     log.write(output.getvalue())
     log.close()
                      
@@ -385,7 +438,7 @@ def dumpAll():
         shutil.rmtree("runtimelog")
     os.mkdir("runtimelog")
     formatter = HtmlFormatter(linenos=True,style=get_style_by_name("paraiso-dark"))
-    for version in ["144"]:#["0","32","48","80","128","144"]:
+    for version in ["0","32"]:#["0","32","48","80","128","144"]:
         if not os.path.isdir("extracted_game/"+version):
             continue
         try:
@@ -400,15 +453,15 @@ def dumpAll():
         for char in os.listdir("extracted_game/"+version+"/fighter"):
             if char == "common" or char == "mii":
                 continue
-            
+            if char != "captain": continue
             lookup = motionpac("extracted_game/%s/fighter/%s/motion/"%(0,char))
             indexedSubactionNames = defaultdict(str)
             
             for subChar, motionPath, scriptPath, mcscbPath in getProcessList(char,version):
                 if subChar == "":
-                    logfn= char+".html"
+                    logfn= char+".py"
                 else:
-                    logfn = char+"_"+subChar+".html"
+                    logfn = char+"_"+subChar+".py"
                 print "\t",char,subChar
                 ''' Parse MSCSB '''
                 if os.path.isfile(mcscbPath %(version)):
