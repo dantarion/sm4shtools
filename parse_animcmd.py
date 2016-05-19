@@ -414,6 +414,8 @@ def motionpac(folder):
                     d[zlib.crc32(m.group(4).lower())& 0xffffffff] = m.group(4)
                     d[zlib.crc32(m.group(4).lower()+"_c2")& 0xffffffff] = m.group(4)+"_C2"
                     d[zlib.crc32(m.group(4).lower()+"_c3")& 0xffffffff] = m.group(4)+"_C3"
+                    d[zlib.crc32(m.group(4).lower()+"r")& 0xffffffff] = m.group(4)+"R"
+                    d[zlib.crc32(m.group(4).lower()+"l")& 0xffffffff] = m.group(4)+"L"
     d[zlib.crc32("attack100end")] = "Attack100End"              
     return d
 prefix = "extracted_game/%s/fighter/"
