@@ -1,3 +1,101 @@
+attributeNames = {}
+attributeNames[32] = "Nair Landing Lag"
+attributeNames[29] = "Fair Landing Lag"
+attributeNames[30] = "Bair Landing Lag"
+attributeNames[31] = "Uair Landing Lag"
+attributeNames[32] = "Dair Landing Lag"
+smashCharacters = {}   
+smashCharacters[0x0] = "Omakase"
+smashCharacters[0x1] = "Miifighter"
+smashCharacters[0x2] = "Miiswordsman"
+smashCharacters[0x3] = "Miigunner"
+smashCharacters[0x4] = "Mario"
+smashCharacters[0x5] = "Donkey"
+smashCharacters[0x6] = "Link"
+smashCharacters[0x7] = "Samus"
+smashCharacters[0x8] = "Yoshi"
+smashCharacters[0x9] = "Kirby"
+smashCharacters[0xa] = "Fox"
+smashCharacters[0xb] = "Pikachu"
+smashCharacters[0xc] = "Luigi"
+smashCharacters[0xd] = "Captain"
+smashCharacters[0xe] = "Ness"
+smashCharacters[0xf] = "Peach"
+smashCharacters[0x10] = "Koopa"
+smashCharacters[0x11] = "Zelda"
+smashCharacters[0x12] = "Sheik"
+smashCharacters[0x13] = "Marth"
+smashCharacters[0x14] = "Gamewatch"
+smashCharacters[0x15] = "Ganon"
+smashCharacters[0x16] = "Falco"
+smashCharacters[0x17] = "Wario"
+smashCharacters[0x18] = "Metaknight"
+smashCharacters[0x19] = "Pit"
+smashCharacters[0x1a] = "Szerosuit"
+smashCharacters[0x1b] = "Pikmin"
+smashCharacters[0x1c] = "Diddy"
+smashCharacters[0x1d] = "Dedede"
+smashCharacters[0x1e] = "Ike"
+smashCharacters[0x1f] = "Lucario"
+smashCharacters[0x20] = "Robot"
+smashCharacters[0x21] = "Toonlink"
+smashCharacters[0x22] = "Lizardon"
+smashCharacters[0x23] = "Sonic"
+smashCharacters[0x24] = "Drmario"
+smashCharacters[0x25] = "Rosetta"
+smashCharacters[0x26] = "Wiifit"
+smashCharacters[0x27] = "Littlemac"
+smashCharacters[0x28] = "Murabito"
+smashCharacters[0x29] = "Palutena"
+smashCharacters[0x2a] = "Reflet"
+smashCharacters[0x2b] = "Duckhunt"
+smashCharacters[0x2c] = "KoopaJr"
+smashCharacters[0x2d] = "Shulk"
+smashCharacters[0x2e] = "Purin"
+smashCharacters[0x2f] = "Lucina"
+smashCharacters[0x30] = "Pitb"
+smashCharacters[0x31] = "Gekkouga"
+smashCharacters[0x32] = "Pacman"
+smashCharacters[0x33] = "Rockman"
+smashCharacters[0x34] = "DLC1"
+smashCharacters[0x35] = "DLC2"
+smashCharacters[0x36] = "DLC3"
+smashCharacters[0x37] = "DLC4"
+smashCharacters[0x38] = "DLC5"
+smashCharacters[0x39] = "DLC6"
+smashCharacters[0x3A] = "DLC7"
+smashCharacters[0x3B] = "DLC8"
+smashCharacters[0x3C] = "DLC8"
+smashCharacters[0x3D] = "DLC8"
+smashCharacters[0x3E] = "DLC8"
+smashCharacters[0x3F] = "DLC8"
+smashCharacters[0x40] = "DLC8"
+smashCharacters[0xc8] = "Miiall"
+smashCharacters[0xc9] = "Koopag"
+smashCharacters[0xca] = "Littlemacg"
+smashCharacters[0xcb] = "Question"
+smashCharacters[0xd2] = "Master"
+smashCharacters[0xd3] = "Mcore"
+smashCharacters[0xd4] = "Crazy"
+smashCharacters[0xd5] = "MasterCrazy"
+smashCharacters[0xd6] = "Bakudan"
+smashCharacters[0xd7] = "Sandbag"
+smashCharacters[0xd8] = "Ridley"
+smashCharacters[0xd9] = "MetalFace"
+smashCharacters[0xda] = "YellowDevil"
+smashCharacters[0xdb] = "Miienemyf"
+smashCharacters[0xdc] = "Miienemys"
+smashCharacters[0xdd] = "Miienemyg"
+smashCharacters[0xde] = "Miienemyall"
+smashCharacters[0xdf] = "Virus"
+smashCharacters[0xe0] = "Narration"
+smashCharacters[0xe1] = "Assist"
+smashCharacters[0xe2] = "Pokemon"
+smashCharacters[0xe3] = "Enemy"
+def getAllVersionPairs():
+    versions = ["0","32","48","80","128","144"]
+    for i in range(0,len(versions)-1):
+        yield (versions[i],versions[i+1])
 import os, struct,sys,re,zlib,cStringIO,shutil
 from commands import commands
 import mscsb_commands
@@ -24,6 +122,7 @@ if os.path.isfile(RPX_ELF):
         lookupTable[entry[0]] = (entry[1],size)
 
     f = open("command.py.template","w")
+    
     f.write("commands = {}\n")
     j = 0
     for item in sorted(lookupTable.items(), key=lambda it: it[1][0]):
@@ -41,17 +140,24 @@ if os.path.isfile(RPX_ELF):
                     tmp["fmt"] += "I"
             tmp["params"] = []
         f.write( "commands[0x%08X] = {'name':'%s', 'fmt':'%s','params': %s} #%03X\n"%(item[0],tmp['name'],tmp['fmt'],repr(tmp['params']),j))
+       
         j += 1
     f.close()
+    
+t = open("smash4.hash","w")
+for command in commands:
+    t.write("{0:08X}:00000000\n".format(command))
+t.close()    
 def getParamText(params):
     param_text = []
     for pi,param in enumerate(params):
         if isinstance(param,float):
             param_text.append("%#f" %param)
-        elif isinstance(param,str):
-            param_text.append(param)
-        else:
+        elif isinstance(param, (int, long, float, complex)):
             param_text.append(hex(param))
+        else:
+            param_text.append(str(param))
+
     return param_text
 def parseMCSCB(filename,logname):
     f = open(filename,"rb")
@@ -128,9 +234,17 @@ def parseMCSCB(filename,logname):
             comment = ""
             CMD_DATA = mscsb_commands.commands[CMD]
             
-            if CMD in [0x8A,0x8D]:
+            if CMD in [0x8A]:
                 STACK.append(params[0])
-            if CMD == 0x2D:
+            if CMD in [0x8B,0x8D]:
+                STACK.append(params)
+            if CMD  in[0xA6,0xA7,0xAA]:
+                call_params = STACK[-2:]
+                comment = "(%s)" % (", ".join(getParamText(call_params)))
+            if CMD  in[0x2C]:
+                call_params = STACK[-params[0]:]
+                comment = "(%s)" % (", ".join(getParamText(call_params)))
+            if CMD  in[0xAD,0x2D]:
                 call_params = STACK[-params[0]:]
                 comment = "(id=%d) (%s))" % (params[1], ", ".join(getParamText(call_params)))
             if CMD in [0x2F,0x31]:
@@ -147,12 +261,12 @@ def parseMCSCB(filename,logname):
                 tmp = []
                 for j in range(1,params[1]+1):
                     tmp.append("param"+str(j))
-                output.write("\ndef func_%02X(%s):" % (index,", ".join(tmp)))
+                output.write("\ndef func_%02X(%s):'''%s'''" % (index,", ".join(tmp),','.join(param_text)))
                 
             elif CMD in [0x8A]:
                 output.write("params.append(%s)"% (", ".join(param_text)))
             
-            elif CMD in [0x1C,0x41]:
+            elif CMD in [0x41]:
                 output.write("unk%02X(%s,%s,params[0x%x])\n"% (CMD,["TYPE_INT","TYPE3B"][params[0]],params[1],params[2]))
             else:
                 output.write("%s_%02X(%s)" %(CMD_DATA['name'],CMD,", ".join(param_text)))
@@ -162,6 +276,8 @@ def parseMCSCB(filename,logname):
             #output.write( "#@local-0x%X" % (off-func_start))
             #output.write( " #@global-0x%X" % (off))
             output.write("\n")
+            if CMD in [0xA6,0xA7,0xAA,0xAD,0x2C,0x2D,0x2F,0x31]:
+                output.write("\n")
     log.write(output.getvalue())
     log.close()
                      
@@ -174,23 +290,24 @@ def parseParams(filename):
     group = 0
     groupIndex = 0
     currentGroup = None
+    
     while True:
         try:
             t = ord(f.read(1))
             if t == 2:
                 data = struct.unpack(">1B",f.read(1))[0]
             elif t == 0x20:
+                
                 data = struct.unpack(">I",f.read(4))[0]
                 if currentGroup:
                     attrs.append(currentGroup)
-                currentGroup = []
-                continue
+                currentGroup = [data]
             elif t == 0x4:
                 data = hex(struct.unpack(">h",f.read(2))[0])
             elif t == 0x5:
                 data = hex(struct.unpack(">i",f.read(4))[0])
             elif t == 0x6:
-                data = struct.unpack(">I",f.read(4))[0]
+                data = hex(struct.unpack(">I",f.read(4))[0])
             elif t == 0x7:
                 data = struct.unpack(">f",f.read(4))[0]
             else:
@@ -201,9 +318,12 @@ def parseParams(filename):
             readInaRow += 1
             if not currentGroup:
                 currentGroup = []
+            
             currentGroup.append(data)
         except TypeError:
+            attrs.append(currentGroup)
             return attrs
+    attrs.append(currentGroup)
     return attrs
 def parseACMD(filename, log=False):
     global commands
@@ -299,15 +419,49 @@ def motionpac(folder):
 prefix = "extracted_game/%s/fighter/"
 def getProcessList(char,version):
     processList = []
-    processList.append(("",prefix+"%s/script/animcmd/body/motion.mtable"%(char),prefix+"%s/script/animcmd/body/"%(char),prefix+"%s/script/msc/%s.mscsb"%(char,char)))
+    processList.append(("",(prefix+"%s/script/animcmd/body/motion.mtable")%(version,char),(prefix+"%s/script/animcmd/body/")%(version,char),(prefix+"%s/script/msc/%s.mscsb")%(version,char,char)))
     
     if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (version,char)):
         for d in os.listdir((prefix+"%s/script/animcmd/weapon/") % (version,char)):
             if os.path.isdir((prefix+"%s/script/animcmd/weapon/") % (version,char)+d):
-                processList.append((d,prefix+"%s/script/animcmd/weapon/%s/motion.mtable" %(char,d),prefix+"%s/script/animcmd/weapon/%s/" % (char,d),prefix+"%s/script/msc/%s/%s.mscsb" % (char,d,d)))
+                processList.append((d,(prefix+"%s/script/animcmd/weapon/%s/motion.mtable") %(version,char,d),(prefix+"%s/script/animcmd/weapon/%s/") % (version,char,d),(prefix+"%s/script/msc/%s/%s.mscsb") % (version,char,d,d)))
     return processList
+def diff_attributes():
+    for from_version,to_version in getAllVersionPairs():
+        fromParams = parseParams("extracted_game/"+from_version+"/param/fighter/fighter_param.bin")
+        toParams = parseParams("extracted_game/"+to_version+"/param/fighter/fighter_param.bin")
+        
+        fromcharCount = fromParams[0][0]
+        fromattrCount = ((len(fromParams[0])-1)/fromParams[0][0])
+        tocharCount = fromParams[0][0]
+        toattrCount = ((len(toParams[0])-1)/toParams[0][0])
+        
+        print fromattrCount,toattrCount
+        
+        #print from_version,charCount,attrCount
+        for i in range(0,fromcharCount):
+            for j in range(0,fromattrCount):
+                fromVal = fromParams[0][2+i*fromattrCount+j]
+                
+                    #toVal = "removed in this patch"
+                toVal = toParams[0][2+i*toattrCount+j]
+                if fromattrCount != toattrCount:
+                    if j > 171:
+                        toVal = "removed in this patch"
+                    if j > 180:
+                        toVal = toParams[0][2+i*toattrCount+j-8]
+                    if j > 307:
+                        toVal = toParams[0][2+i*toattrCount+j-7]
+                
+                    
+                if toVal == "removed in this patch":
+                    continue
+                if fromVal != toVal:
+                    if j in attributeNames:
+                        j = attributeNames[j]
+                    print "v{0} -> v{1}: {2}[{3}] : {4} => {5}".format(from_version,to_version,smashCharacters[i+1],j,fromVal,toVal)
 def diff():
-    for from_version,to_version in [("128","144")]:# ["0","32","48","80","128"]:
+    for from_version,to_version in [("144","160")]:# ["0","32","48","80","128"]:
         if not os.path.isdir("extracted_game/"+from_version) or not os.path.isdir("extracted_game/"+to_version):
             continue
     
@@ -438,7 +592,7 @@ def dumpAll():
         shutil.rmtree("runtimelog")
     os.mkdir("runtimelog")
     formatter = HtmlFormatter(linenos=True,style=get_style_by_name("paraiso-dark"))
-    for version in ["0","32"]:#["0","32","48","80","128","144"]:
+    for version in ["160"]:#["0","32","48","80","128","144"]:
         if not os.path.isdir("extracted_game/"+version):
             continue
         try:
@@ -448,12 +602,11 @@ def dumpAll():
             print version,revision
         except:
             print "Unexpected error:", sys.exc_info()[0]
-            
 
         for char in os.listdir("extracted_game/"+version+"/fighter"):
             if char == "common" or char == "mii":
                 continue
-            if char != "captain": continue
+            if char != "marth": continue
             lookup = motionpac("extracted_game/%s/fighter/%s/motion/"%(0,char))
             indexedSubactionNames = defaultdict(str)
             
@@ -464,15 +617,15 @@ def dumpAll():
                     logfn = char+"_"+subChar+".py"
                 print "\t",char,subChar
                 ''' Parse MSCSB '''
-                if os.path.isfile(mcscbPath %(version)):
+                if os.path.isfile(mcscbPath):
                     print "MSCSBBBBB"
                     outdir = "processed/msc/%s/" % (version)
                     if not os.path.isdir(outdir):
                         os.makedirs(outdir)
-                    code = parseMCSCB(mcscbPath%version, outdir+logfn)
+                    code = parseMCSCB(mcscbPath, outdir+logfn)
                 continue
                 if os.path.isfile(motionPath):                   
-                    params = parseParams(prefix+"../param/fighter/fighter_param_vl_%s.bin"%(char))
+                    params = parseParams((prefix+"../param/fighter/fighter_param_vl_%s.bin")%(version,char))
                     f = open(motionPath,"rb")
                     outdir = "processed/animcmd/%s/" % (version)
                     if not os.path.isdir(outdir):
@@ -515,3 +668,4 @@ def dumpAll():
                     log.close()
 dumpAll()
 #diff()
+#diff_attributes()
