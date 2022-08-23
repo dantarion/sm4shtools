@@ -1,5 +1,5 @@
 # sm4shtools
-Tools for examining, editing, and extracting data from Super Smash Brothers for Wii/3DS
+Tools for examining, editing, and extracting data from Super Smash Brothers for Wii U/3DS
 
 ## What is this?
 This is the code that generates the raw diffs and gumps that mastercore uses to show changes.
